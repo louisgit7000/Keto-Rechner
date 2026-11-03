@@ -65,6 +65,8 @@ footer{color:var(--mut);font-size:.78rem}
 .nt .pct{width:1%;white-space:nowrap;text-align:right;font-size:.8rem;color:var(--mut);padding-left:8px}
 .nt tr.warn .pb i{background:var(--bad)}
 .nt tr.na td{color:var(--mut)}
+.total.static{position:static;box-shadow:none}
+.hrow:hover{background:var(--soft)}
 .note{background:var(--soft);border-radius:10px;padding:8px 12px;font-size:.84rem;margin:10px 0}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);max-width:460px;width:calc(100% - 32px);padding:16px}
 dialog::backdrop{background:rgba(0,0,0,.4)}
@@ -84,6 +86,7 @@ dialog label{display:block;font-size:.85rem;color:var(--mut);margin:10px 0 3px}
 </header>
 <nav>
   <button id="nav-meal" class="on">Mahlzeit</button>
+  <button id="nav-day">Tag</button>
   <button id="nav-rec">Rezepte</button>
 </nav>
 
@@ -106,7 +109,8 @@ dialog label{display:block;font-size:.85rem;color:var(--mut);margin:10px 0 3px}
     <div class="actions">
       <button class="btn" id="add">+ Zeile</button>
       <button class="btn" id="clear">Mahlzeit zurücksetzen</button>
-      <button class="btn pri" id="saverec">Als Rezept speichern</button>
+      <button class="btn pri" id="addday">Zum Tag hinzufügen</button>
+      <button class="btn" id="saverec">Als Rezept speichern</button>
     </div>
   </div>
 
@@ -125,12 +129,61 @@ dialog label{display:block;font-size:.85rem;color:var(--mut);margin:10px 0 3px}
   </footer>
 </main>
 
+<main id="page-day" class="hide">
+  <div class="trow" style="margin-bottom:10px;justify-content:flex-start;gap:6px">
+    <button class="btn sm" id="day-prev" aria-label="Vorheriger Tag">◀</button>
+    <input type="date" id="day-date" style="width:auto">
+    <button class="btn sm" id="day-next" aria-label="Nächster Tag">▶</button>
+    <button class="btn sm" id="day-today">Heute</button>
+  </div>
+  <div class="total static">
+    <div class="small" id="day-label"></div>
+    <div class="big"><span id="d-sum">0</span> <small>g KH an diesem Tag</small></div>
+    <div class="range" id="d-range"></div>
+    <div class="bar"><i id="d-bar"></i></div>
+    <div class="trow"><span id="d-budget"></span><span id="d-left"></span></div>
+  </div>
+  <div class="small" id="syncstate" style="margin:-6px 0 10px"></div>
+  <div class="seg"><button id="dv-list" class="on">Mahlzeiten</button><button id="dv-nut">Alle Nährstoffe</button></div>
+  <div id="dview-list">
+    <div id="daylist"></div>
+    <div class="actions"><button class="btn pri" id="day-addmeal">+ Mahlzeit berechnen</button></div>
+    <h2>Verlauf</h2>
+    <div id="hist"></div>
+    <div class="small" id="histavg"></div>
+  </div>
+  <div id="dview-nut" class="hide">
+    <div class="trow" style="margin-bottom:8px">
+      <label>Vergleich mit
+        <select id="prof2" style="width:auto"><option value="m">Mann, 25–50 J. (DGE)</option><option value="f">Frau, 25–50 J. (DGE)</option><option value="eu">EU-Kennzeichnungswerte</option></select></label>
+      <label>Körpergewicht (kg) <input id="weight2" type="number" min="30" max="250" step="1" value="70" inputmode="decimal"></label>
+    </div>
+    <div class="small" style="margin-bottom:6px">Anteil am Tagesbedarf, den alle Mahlzeiten dieses Tages zusammen decken.</div>
+    <div id="daynut"></div>
+  </div>
+</main>
+
 <main id="page-rec" class="hide">
   <div id="recnote" class="note hide"></div>
   <div class="seg"><button id="r-own" class="on">Meine Rezepte</button><button id="r-pub">Öffentliche Rezepte</button></div>
   <input type="text" id="rsearch" placeholder="Rezepte durchsuchen…" style="margin-bottom:10px">
   <div id="reclist"></div>
 </main>
+
+<dialog id="dlg-day">
+  <form method="dialog" id="dayform">
+    <h2 style="margin-top:0">Zum Tag hinzufügen</h2>
+    <label for="d-name">Name (optional)</label><input type="text" id="d-name" maxlength="100">
+    <label for="d-type">Mahlzeit</label><select id="d-type"><option>Frühstück</option><option>Mittagessen</option><option>Abendessen</option><option>Snack</option></select>
+    <label for="d-eaten">Gegessene Portionen <span class="small" id="d-of"></span></label><input type="number" id="d-eaten" min="0.25" step="0.25" value="1">
+    <label for="d-when">Für welchen Tag?</label>
+    <select id="d-when"><option value="today">Heute</option><option value="yesterday">Gestern</option><option value="other">Anderes Datum …</option></select>
+    <input type="date" id="d-date" class="hide" style="margin-top:6px">
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="d-clear" style="width:auto" checked> Danach die Zutaten leeren</label>
+    <div class="err" id="d-err"></div>
+    <div class="actions" style="margin-bottom:0"><button class="btn pri" type="submit">Hinzufügen</button><button class="btn" type="button" id="d-close">Abbrechen</button></div>
+  </form>
+</dialog>
 
 <dialog id="dlg-auth">
   <form method="dialog" id="authform">
@@ -188,14 +241,14 @@ const rowsEl=$('#rows');
 function calc(){
   const P=Math.max(num(S.portions)||1,1);
   const t={};NUT.keys.forEach(k=>t[k]={v:0,miss:0,have:0});
-  let kh=0,lo=0,hi=0,items=0;
+  let kh=0,lo=0,hi=0,items=0;const nok=new Set();
   S.rows.forEach(r=>{
     const f=BY[r.n],g=num(r.g);if(!f||!g)return;items++;
     const e=eff(f);kh+=g/100*e.kh;lo+=g/100*e.lo;hi+=g/100*e.hi;
-    const a=NUT.foods[f.de];
+    const a=NUT.foods[f.de];if(!a||a[0]==null)nok.add(f.de);
     NUT.keys.forEach((k,i)=>{const v=a?a[i]:null;if(v==null)t[k].miss++;else{t[k].v+=g/100*v;t[k].have++}});
   });
-  return {P,t,kh,lo,hi,items};
+  return {P,t,kh,lo,hi,items,nokcal:[...nok]};
 }
 
 /* ---------- Zutaten-Zeilen ---------- */
@@ -270,8 +323,8 @@ const GROUPS=[
  ['Fettsäuren',[['ala'],['epadha'],['mufa'],['pufa'],['chol']]],
  ['Mineralstoffe',['na','cl','k','ca','mg','p','fe','zn','cu','mn','se','i'].map(k=>[k])],
  ['Vitamine',['va','vd','ve','vk','vc','b1','b2','b3','b5','b6','b9','b12','choline'].map(k=>[k])]];
-function renderNut(c){
-  c=c||calc();const P=c.P,t=c.t;
+function renderNut(c,el){
+  c=c||calc();el=el||$('#nutpanel');const P=c.P,t=c.t;
   const meta={};NUT.keys.forEach((k,i)=>meta[k]={name:NUT.names[i],unit:NUT.units[i]});
   meta.epadha={name:'Omega-3 EPA + DHA',unit:'g'};
   const val=k=>k==='epadha'?{v:(t.epa.v+t.dha.v)/P,miss:Math.max(t.epa.miss,t.dha.miss)}:{v:t[k].v/P,miss:t[k].miss};
@@ -281,8 +334,8 @@ function renderNut(c){
   const R=k=>ref[k]||REFS[prof][k];
   const kcal=val('kcal').v;
   let h='';
-  if(!c.items)h+='<div class="note">Noch keine Zutaten – trage links bei „Zutaten“ Lebensmittel und Gramm ein.</div>';
-  const nokcal=[];S.rows.forEach(r=>{const f=BY[r.n];if(f&&num(r.g)&&(!NUT.foods[f.de]||NUT.foods[f.de][0]==null))nokcal.push(f.de)});
+  if(!c.items)h+='<div class="note">'+(c.empty||'Noch keine Zutaten – trage bei „Zutaten“ Lebensmittel und Gramm ein.')+'</div>';
+  const nokcal=c.nokcal||[];
   if(nokcal.length)h+=`<div class="note">Für ${nokcal.map(esc).join(', ')} liegen keine Nährwertdaten vor – diese Zutaten fehlen in den Summen unten.</div>`;
   GROUPS.forEach(([title,list])=>{
     h+=`<h2>${title}</h2><table class="nt">`;
@@ -308,19 +361,21 @@ function renderNut(c){
   const kP=pr*4,kF=fa*9,kC=kn*4,sum=kP+kF+kC;
   if(c.items&&sum>0)h=`<div class="card"><b>Verteilung der Energie (verwertbare KH aus dem Keto-Rechner)</b><div class="chips"><span class="chip">Fett ${Math.round(kF/sum*100)} %</span><span class="chip">Eiweiß ${Math.round(kP/sum*100)} %</span><span class="chip">KH ${Math.round(kC/sum*100)} %</span><span class="chip">Keto-Verhältnis ${(kF/Math.max(kP+kC,0.1)*1).toFixed(1).replace('.',',')} : 1</span></div><div class="small">Das Keto-Verhältnis ist Fett (g) zu Eiweiß + KH (g). Bei Keto-Therapie sind oft 2–4 : 1 üblich, bei normaler Keto-Ernährung reicht weniger.</div></div>`+h;
   h+=`<div class="note">Keine Daten in den Lebensmittellisten für Biotin, Chrom, Molybdän und Fluorid. Jod und Chlorid fehlen bei vielen Lebensmitteln (Summe dann zu niedrig). Zahlen sind Orientierungswerte aus USDA und CIQUAL, keine medizinische Beratung.</div>`;
-  $('#nutpanel').innerHTML=h;
+  el.innerHTML=h;
 }
 
 /* ---------- Ansicht, Navigation ---------- */
 function setView(v){$('#view-ing').classList.toggle('hide',v!=='ing');$('#view-nut').classList.toggle('hide',v!=='nut');$('#v-ing').classList.toggle('on',v==='ing');$('#v-nut').classList.toggle('on',v==='nut');if(v==='nut')renderNut()}
 $('#v-ing').onclick=()=>setView('ing');$('#v-nut').onclick=()=>setView('nut');
-function setPage(p){$('#page-meal').classList.toggle('hide',p!=='meal');$('#page-rec').classList.toggle('hide',p!=='rec');$('#nav-meal').classList.toggle('on',p==='meal');$('#nav-rec').classList.toggle('on',p==='rec');if(p==='rec')loadRecipes()}
-$('#nav-meal').onclick=()=>setPage('meal');$('#nav-rec').onclick=()=>setPage('rec');
-$('#budget').value=S.budget;$('#portions').value=S.portions;$('#prof').value=S.prof;$('#weight').value=S.weight;
+function setPage(p){['meal','rec','day'].forEach(x=>{$('#page-'+x).classList.toggle('hide',p!==x);$('#nav-'+x).classList.toggle('on',p===x)});if(p==='rec')loadRecipes();if(p==='day')renderDay()}
+$('#nav-meal').onclick=()=>setPage('meal');$('#nav-day').onclick=()=>setPage('day');$('#nav-rec').onclick=()=>setPage('rec');
+$('#budget').value=S.budget;$('#portions').value=S.portions;
+const syncProf=()=>{$('#prof').value=$('#prof2').value=S.prof;$('#weight').value=$('#weight2').value=S.weight};syncProf();
+function refreshNut(){if(!$('#view-nut').classList.contains('hide'))renderNut();if(!$('#page-day').classList.contains('hide'))renderDay()}
 $('#budget').oninput=e=>{S.budget=num(e.target.value);save();total()};
 $('#portions').oninput=e=>{S.portions=Math.max(num(e.target.value)||1,1);save();total()};
-$('#prof').onchange=e=>{S.prof=e.target.value;save();renderNut()};
-$('#weight').oninput=e=>{S.weight=num(e.target.value)||70;save();renderNut()};
+$('#prof').onchange=$('#prof2').onchange=e=>{S.prof=e.target.value;save();syncProf();refreshNut()};
+$('#weight').oninput=$('#weight2').oninput=e=>{S.weight=num(e.target.value)||70;save();syncProf();refreshNut()};
 $('#add').onclick=()=>{S.rows.push({n:'',g:''});save();render();rowsEl.lastChild.querySelector('input').focus()};
 $('#clear').onclick=()=>{if(confirm('Alle Zeilen leeren?')){S.rows=Array.from({length:ROWS},()=>({n:'',g:''}));S.recipeId=null;S.recipeName='';S.portions=1;$('#portions').value=1;save();render()}};
 
@@ -461,17 +516,149 @@ async function initCloud(){
     const strip=d=>{const o=d.data();o.id=d.id;return o};
     cloud={
       signIn:(m,p)=>Au.signInWithEmailAndPassword(auth,m,p),
-      signUp:async(m,p,n)=>{const c=await Au.createUserWithEmailAndPassword(auth,m,p);await Au.updateProfile(c.user,{displayName:n||m.split('@')[0]});user={uid:c.user.uid,name:n||m.split('@')[0]};showUser()},
+      signUp:async(m,p,n)=>{const c=await Au.createUserWithEmailAndPassword(auth,m,p);await Au.updateProfile(c.user,{displayName:n||m.split('@')[0]});user={uid:c.user.uid,name:n||m.split('@')[0]};showUser();syncDays()},
       signOut:()=>Au.signOut(auth),reset:m=>Au.sendPasswordResetEmail(auth,m),
       own:async uid=>(await Fs.getDocs(Fs.query(Fs.collection(db,'recipes'),Fs.where('owner','==',uid)))).docs.map(strip),
       pub:async()=>(await Fs.getDocs(Fs.query(Fs.collection(db,'recipes'),Fs.where('public','==',true)))).docs.map(strip),
       save:async(r,u)=>{const o=Object.assign({},r,{owner:u.uid,ownerName:u.name});delete o.example;await Fs.setDoc(Fs.doc(db,'recipes',r.id),o)},
-      remove:id=>Fs.deleteDoc(Fs.doc(db,'recipes',id))
+      remove:id=>Fs.deleteDoc(Fs.doc(db,'recipes',id)),
+      daysAll:async uid=>(await Fs.getDocs(Fs.collection(db,'users',uid,'days'))).docs.map(d=>({id:d.id,entries:d.data().entries||[],updated:d.data().updated||0})),
+      daySave:(uid,d,entries,updated)=>Fs.setDoc(Fs.doc(db,'users',uid,'days',d),{entries,updated})
     };
     mode='cloud';
-    Au.onAuthStateChanged(auth,u=>{user=u?{uid:u.uid,name:u.displayName||(u.email||'').split('@')[0]}:null;showUser()});
+    let wasUser=false;
+    Au.onAuthStateChanged(auth,u=>{user=u?{uid:u.uid,name:u.displayName||(u.email||'').split('@')[0]}:null;
+      if(!user&&wasUser){days={};meta={};dirty=new Set();ls.set('keto-days-owner','');persistDays();if(!$('#page-day').classList.contains('hide'))renderDay()}   // Abmelden: Tage vom Gerät entfernen (liegen im Konto)
+      wasUser=!!user;showUser();if(user)syncDays()});
   }catch(e){lastErr='Anmeldung nicht erreichbar: '+e.message;mode='local';showUser()}
 }
+
+/* ---------- Tagesprotokoll ---------- */
+const TYPES=['Frühstück','Mittagessen','Abendessen','Snack'];
+let days={};try{days=JSON.parse(ls.get('keto-days')||'{}')}catch(e){}
+let meta={};try{meta=JSON.parse(ls.get('keto-days-meta')||'{}')}catch(e){}
+let dirty=new Set();try{dirty=new Set(JSON.parse(ls.get('keto-days-dirty')||'[]'))}catch(e){}
+const persistDays=()=>{ls.set('keto-days',JSON.stringify(days));ls.set('keto-days-meta',JSON.stringify(meta));ls.set('keto-days-dirty',JSON.stringify([...dirty]))};
+let pushTimer=null;
+function saveDays(k){
+  if(k&&mode==='cloud'&&user){meta[k]=Date.now();dirty.add(k);setSync('sync');clearTimeout(pushTimer);pushTimer=setTimeout(pushDirty,600)}
+  persistDays();
+}
+let lastSync='ok';
+function setSync(st){
+  lastSync=st;const el=document.querySelector('#syncstate');if(!el)return;
+  const m={ok:'☁ Mit deinem Konto synchronisiert',sync:'☁ Synchronisiere …',err:'⚠ Nicht synchronisiert (wird beim nächsten Mal erneut versucht)',local:'Nur auf diesem Gerät gespeichert – <a href="#" id="sync-login">anmelden</a>, um auf allen Geräten zu synchronisieren.',off:'Nur auf diesem Gerät gespeichert.'};
+  const st2=mode!=='cloud'?'off':!user?'local':st;
+  el.innerHTML=m[st2];const a=document.querySelector('#sync-login');if(a)a.onclick=e=>{e.preventDefault();openAuth()};
+}
+async function pushDirty(){
+  if(mode!=='cloud'||!user)return;
+  try{for(const d of [...dirty]){await withTimeout(cloud.daySave(user.uid,d,days[d]||[],meta[d]||Date.now()));dirty.delete(d)}persistDays();setSync('ok')}
+  catch(e){persistDays();setSync('err')}
+}
+async function syncDays(){
+  if(mode!=='cloud'||!user)return;
+  setSync('sync');
+  try{
+    const owner=ls.get('keto-days-owner')||'';
+    if(owner&&owner!==user.uid){days={};meta={};dirty=new Set()}   // Daten eines anderen Kontos auf diesem Gerät nicht vermischen
+    const remote=await withTimeout(cloud.daysAll(user.uid));
+    const rm={};remote.forEach(r=>rm[r.id]=r);
+    new Set([...Object.keys(days),...Object.keys(rm)]).forEach(d=>{
+      const L=days[d],R=rm[d];
+      if(R&&!L){days[d]=R.entries||[];meta[d]=R.updated||0}
+      else if(L&&!R){if(L.length){if(meta[d]==null)meta[d]=Date.now();dirty.add(d)}}
+      else if(L&&R){
+        if(meta[d]==null){const ids=new Set(L.map(e=>e.id));days[d]=L.concat((R.entries||[]).filter(e=>!ids.has(e.id)));meta[d]=Date.now();dirty.add(d)}
+        else if((R.updated||0)>meta[d]){days[d]=R.entries||[];meta[d]=R.updated}
+        else if(meta[d]>(R.updated||0))dirty.add(d);
+      }
+    });
+    ls.set('keto-days-owner',user.uid);persistDays();
+    await pushDirty();
+    if(!$('#page-day').classList.contains('hide'))renderDay();
+  }catch(e){setSync('err')}
+}
+const pad=n=>String(n).padStart(2,'0');
+const dkey=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayKey=()=>dkey(new Date());
+const keyToDate=k=>{const [y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays=(k,n)=>{const d=keyToDate(k);d.setDate(d.getDate()+n);return dkey(d)};
+const dlabel=k=>{const t=todayKey(),s=keyToDate(k).toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});return k===t?'Heute, '+s:k===addDays(t,-1)?'Gestern, '+s:s};
+let dayDate=todayKey();
+function dayCalc(k){
+  const E=days[k]||[],t={};NUT.keys.forEach(x=>t[x]={v:0,miss:0,have:0});let kh=0,lo=0,hi=0;const nok=new Set();
+  E.forEach(e=>{kh+=e.kh*e.scale;lo+=e.lo*e.scale;hi+=e.hi*e.scale;
+    (e.items||[]).forEach(i=>{const f=BY[i.n];if(!f)return;const a=NUT.foods[f.de];if(!a||a[0]==null)nok.add(f.de);
+      NUT.keys.forEach((x,j)=>{const v=a?a[j]:null;if(v==null)t[x].miss++;else{t[x].v+=i.g/100*v*e.scale;t[x].have++}})})});
+  return {P:1,t,kh,lo,hi,items:E.length,nokcal:[...nok],empty:'Noch keine Mahlzeiten an diesem Tag.'};
+}
+const entryKcal=e=>(e.items||[]).reduce((s,i)=>{const f=BY[i.n],a=f&&NUT.foods[f.de];return s+(a&&a[0]!=null?i.g/100*a[0]*e.scale:0)},0);
+function barColor(s,b){return s>b?'var(--bad)':s>b*.8?'var(--warn)':'var(--ok)'}
+function renderDay(){
+  const k=dayDate,E=days[k]||[],b=S.budget,c=dayCalc(k),s=c.kh;
+  $('#day-label').textContent=dlabel(k);$('#day-date').value=k;setSync(lastSync);
+  $('#d-sum').textContent=fmt(s);
+  $('#d-range').textContent=c.hi-c.lo>=0.25?`Mögliche Spanne je nach Quelle: ${fmt(c.lo)}–${fmt(c.hi)} g`:'';
+  const bar=$('#d-bar');bar.style.width=(b>0?Math.min(s/b,1)*100:0)+'%';bar.style.background=barColor(s,b);
+  $('#d-budget').textContent='Tagesbudget '+fmt(b)+' g';
+  $('#d-left').textContent=b>0?(s>b?`${fmt(s-b)} g über dem Budget`:`${fmt(b-s)} g übrig`):'';
+  const L=$('#daylist');L.innerHTML='';
+  if(!E.length)L.innerHTML='<div class="small">Noch keine Mahlzeiten an diesem Tag. Berechne eine Mahlzeit und tippe dort auf „Zum Tag hinzufügen“.</div>';
+  TYPES.forEach(t=>{
+    const es=E.filter(e=>e.type===t).sort((x,y)=>x.ts-y.ts);if(!es.length)return;
+    const h=document.createElement('h2');h.textContent=t;L.appendChild(h);
+    es.forEach(e=>{
+      const d=document.createElement('div');d.className='card';
+      d.innerHTML=`<h3>${esc(e.name||e.type)}</h3><div class="small">${(e.items||[]).slice(0,4).map(i=>i.g+' g '+esc(i.n)).join(', ')}${(e.items||[]).length>4?' …':''}</div>
+        <div class="chips"><span class="chip">${fmt(e.kh*e.scale)} g KH</span><span class="chip">${Math.round(entryKcal(e))} kcal</span></div>
+        <div class="actions" style="margin:6px 0 0;align-items:center"><label class="small">Portionen <input type="number" class="pin" min="0.25" step="0.25" value="${e.eaten}" style="width:80px;display:inline-block"></label></div>`;
+      const act=d.querySelector('.actions');
+      d.querySelector('.pin').onchange=ev=>{const v=num(ev.target.value);if(v>0){e.eaten=v;e.scale=v/e.P;saveDays(k);renderDay()}};
+      const bt=(txt,fn,cls='')=>{const x=document.createElement('button');x.className='btn sm '+cls;x.textContent=txt;x.onclick=fn;act.appendChild(x)};
+      bt('In den Rechner laden',()=>{S.rows=(e.items||[]).filter(i=>BY[i.n]).map(i=>({n:i.n,g:String(i.g)}));while(S.rows.length<ROWS)S.rows.push({n:'',g:''});S.portions=e.P;$('#portions').value=e.P;S.recipeId=null;S.recipeName=e.name||'';save();render();setPage('meal');setView('ing')});
+      bt('Löschen',()=>{if(!confirm('Diese Mahlzeit aus dem Tag entfernen?'))return;days[k]=(days[k]||[]).filter(x=>x.id!==e.id);saveDays(k);renderDay()},'dng');
+      L.appendChild(d);
+    });
+  });
+  // Verlauf
+  const keys=Object.keys(days).filter(x=>days[x].length).sort().reverse().slice(0,14);
+  $('#hist').innerHTML=keys.map(x=>{const v=dayCalc(x).kh,w=b>0?Math.min(v/b,1)*100:0;return `<div class="card hrow" data-k="${x}" style="cursor:pointer;padding:8px 12px"><div class="trow"><span>${esc(dlabel(x))}</span><b>${fmt(v)} g KH</b></div><div class="bar" style="margin:4px 0 0"><i style="width:${w}%;background:${barColor(v,b)}"></i></div></div>`}).join('')||'<div class="small">Noch keine Tage gespeichert.</div>';
+  document.querySelectorAll('#hist .hrow').forEach(el=>el.onclick=()=>{dayDate=el.dataset.k;renderDay();window.scrollTo(0,0)});
+  const last7=keys.slice(0,7);
+  $('#histavg').textContent=last7.length>1?`Durchschnitt der letzten ${last7.length} Tage mit Einträgen: ${fmt(last7.reduce((a,x)=>a+dayCalc(x).kh,0)/last7.length)} g KH`:'';
+  if(!$('#dview-nut').classList.contains('hide'))renderNut(c,$('#daynut'));
+}
+$('#day-prev').onclick=()=>{dayDate=addDays(dayDate,-1);renderDay()};
+$('#day-next').onclick=()=>{dayDate=addDays(dayDate,1);renderDay()};
+$('#day-today').onclick=()=>{dayDate=todayKey();renderDay()};
+$('#day-date').onchange=e=>{if(e.target.value){dayDate=e.target.value;renderDay()}};
+$('#day-addmeal').onclick=()=>{setPage('meal');setView('ing')};
+const dayView=v=>{$('#dview-list').classList.toggle('hide',v!=='list');$('#dview-nut').classList.toggle('hide',v!=='nut');$('#dv-list').classList.toggle('on',v==='list');$('#dv-nut').classList.toggle('on',v==='nut');renderDay()};
+$('#dv-list').onclick=()=>dayView('list');$('#dv-nut').onclick=()=>dayView('nut');
+// Mahlzeit zum Tag hinzufügen
+$('#addday').onclick=()=>{
+  if(!S.rows.some(r=>BY[r.n]&&num(r.g))){alert('Trage zuerst mindestens eine Zutat mit Gramm ein.');return}
+  const h=new Date().getHours();
+  $('#d-type').value=h>=5&&h<11?'Frühstück':h>=11&&h<16?'Mittagessen':h>=16&&h<22?'Abendessen':'Snack';
+  $('#d-name').value=S.recipeName||'';
+  const P=Math.max(num(S.portions)||1,1);$('#d-eaten').value=1;$('#d-of').textContent=P>1?`(die Mahlzeit hat ${P} Portionen)`:'';
+  $('#d-when').value='today';$('#d-date').classList.add('hide');$('#d-date').value=todayKey();$('#d-clear').checked=true;$('#d-err').textContent='';
+  $('#dlg-day').showModal();
+};
+$('#d-when').onchange=e=>{$('#d-date').classList.toggle('hide',e.target.value!=='other')};
+$('#d-close').onclick=()=>$('#dlg-day').close();
+$('#dayform').onsubmit=e=>{
+  e.preventDefault();
+  const w=$('#d-when').value;let k=w==='yesterday'?addDays(todayKey(),-1):w==='other'?$('#d-date').value:todayKey();
+  if(!k){$('#d-err').textContent='Bitte ein Datum wählen.';return}
+  const eaten=num($('#d-eaten').value);if(!eaten){$('#d-err').textContent='Bitte die gegessenen Portionen angeben.';return}
+  const c=calc();
+  const entry={id:newId(),ts:Date.now(),type:$('#d-type').value,name:$('#d-name').value.trim(),items:S.rows.filter(r=>BY[r.n]&&num(r.g)).map(r=>({n:r.n,g:num(r.g)})),kh:c.kh,lo:c.lo,hi:c.hi,P:c.P,eaten,scale:eaten/c.P};
+  (days[k]=days[k]||[]).push(entry);saveDays(k);
+  if($('#d-clear').checked){S.rows=Array.from({length:ROWS},()=>({n:'',g:''}));S.recipeId=null;S.recipeName='';S.portions=1;$('#portions').value=1;save();render()}
+  $('#dlg-day').close();dayDate=k;dayView('list');setPage('day');
+};
 
 render();initCloud();
 </script>
